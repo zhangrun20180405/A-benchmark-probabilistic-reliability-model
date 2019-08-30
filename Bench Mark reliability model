@@ -1,0 +1,159 @@
+'''
+For a fair comparison, we consider the following probabilistic reliability model
+where each subsystem is equipped with one type of component (i.e., |M_i|≡ 1; for all i in N ),
+and ri = P[~ zi ≤ DL];
+which can be estimated from the data. By transforming the integer variable y_{i} with binaries x_{ik},
+the above model can be linearized as the following MIP with binaries (Feizollahi and Modarres 2012)
+
+
+References:
+Feizollahi, M.J., S. Ahmed, M. Modarres. 2014. The robust redundancy allocation problem in series-parallel
+systems with budgeted uncertainty. IEEE Transactions on reliability 63 (1): 239{250}
+
+
+Appendix: 
+1. Solver: Gurobipi 
+2. Langurage: Python
+
+'''
+
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Aug 21 16:05:50 2019
+
+@author: Run Zhang
+
+"""
+import scipy.stats as stats
+import random as random
+from gurobipy import *
+import math
+
+
+# Create model
+def fun_create_data(Theta):
+    z_lower = np.array([10, 4, 4.5])
+    z_upper = np.array([23, 6, 8])
+    z_mean = np.array([15, 10, 6])
+    sigma = 1
+    n_samples = 2000
+    norm_dist = []
+    z = np.empty([12, n_samples, len(z_mean)])
+    print(len(z))
+    #复现的时候可以调用的数据入口
+    recurrent_backup=[]
+   # 初始数据
+    for i in range(len(z_mean)):
+        dist = stats.truncnorm((z_lower[i] - z_mean[i]) / sigma, (z_upper[i] - z_mean[i]) / sigma, loc=z_mean[i], scale=sigma)
+        z[0, :, i] = dist.rvs(n_samples)
+        # 基于上一轮 z[n] 数据的均值和协方差矩阵创立的下一个 z[n+1]轮数据
+    for n in range(10):
+        Theta= Theta
+        randomnumber=random.random()*random.random()
+        norm_dist.append((np.mean(z[n], axis=0)+Theta*randomnumber, np.cov(z[n], rowvar=0)))
+        print("random number in this case stage z["+str(n)+"],is"+ str(randomnumber) )
+        recurrent_backup.append(randomnumber)
+        z[n+1] = np.random.multivariate_normal(norm_dist[n][0], norm_dist[n][1],n_samples)
+    for n in range(10):
+        z[11, (n * n_samples // 10):(n * n_samples // 10 + n_samples //10)] =  np.random.multivariate_normal(norm_dist[n][0], norm_dist[n][1],n_samples//10)
+    return (z[11])
+
+
+def fun_Pr_ri(data):
+    '''
+    Input:
+    data, np.array; float
+    data[i][j], i is system i.
+    while j is the the lifetime data insided.
+    
+    OutPut:
+        ri:probability of ith system less then predefined D_L 
+    '''
+    r=[]
+    for i in range(len(data_new)):
+        z=0
+        for j in (data_new[i]):
+            if (j <=D_L):
+                z+=1
+                #print(z)
+        print(z/len(data_new[i]))
+        r.append(z/len(data_new[i]) )   
+   
+    return (r)
+#list print will transder to list as default
+    
+'''
+Data Set 
+
+D_L=6
+N=3
+U=(8,8,8)  # N
+L=(1,1,1)  # N
+C=(10,1,1.5)  # N
+R_0=(0.6)
+data_new=fun_create_data(0.5).T
+r=fun_Pr_ri(data_new)   #N
+'''
+D_L=6
+N=3
+U=(8,8,8)  # N
+L=(1,1,1)  # N
+C=(10,1,1.5)  # N
+R_0=(0.6)
+data_new=fun_create_data(0.5).T
+r=fun_Pr_ri(data_new)   #N
+
+
+
+def BaseLine_Model(r):
+    
+    m=Model("BaseLineModel")
+    
+    D_L=6
+    N=3
+    U=(8,8,8)  # N
+    L=(1,1,1)  # N
+    C=(10,1,1.5)  # N
+    R_0=(0.6)
+    
+    '''
+    Variable
+    '''
+    x={}
+    for i in range(N):
+        for k in range(U[i]-L[i]+1):
+            x[i,k]=m.addVar(vtype=GRB.BINARY,name="x_%s_%s"%(i,k))
+    
+    
+    
+    m.update()
+    
+    m.addConstr(sum(x[i,k]*math.log(1-math.pow(r[i],L[i]+k)) for i in range(N) for k in range(U[i]-L[i]+1))-math.log(R_0), GRB.GREATER_EQUAL,0 )
+    
+    m.addConstr(sum(x[i,k] for k in range(U[i]-L[i]))-1, GRB.EQUAL,0)
+    
+    obj=sum((L[i]+sum(k*x[i,k] for k in range(U[i]-L[i]+1)))*C[i] for i in range(N))
+    
+    m.setObjective(obj, sense=GRB.MINIMIZE)
+    
+    m.optimize()
+    
+    if (m.status == GRB.Status.OPTIMAL):
+        objValue = m.objVal  # 最优值
+        solution=m.getAttr('x', x)
+        print(objValue)
+        print(solution)
+    
+    
+    elif (m.status == GRB.Status.INFEASIBLE):
+        print("Model is infeasible")
+        sys.exit(0)
+    elif (m.status == GRB.Status.UNBOUNDED):
+        print("Model is unbounded")
+        sys.exit(0)
+    else:
+        print("Optimization ended with status %d" % m.status)
+        sys.exit(0)
+
+
+ 
