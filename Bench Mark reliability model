@@ -1,9 +1,9 @@
 '''
-For a fair comparison, we consider the following probabilistic reliability model
+For a fair comparison, we consider the following probabilistic reliability mode(Feizollahi and Modarres 2012)
 where each subsystem is equipped with one type of component (i.e., |M_i|≡ 1; for all i in N ),
 and ri = P[~ zi ≤ DL];
 which can be estimated from the data. By transforming the integer variable y_{i} with binaries x_{ik},
-the above model can be linearized as the following MIP with binaries (Feizollahi and Modarres 2012)
+the above model can be linearized as the following MIP with binaries 
 
 
 References:
